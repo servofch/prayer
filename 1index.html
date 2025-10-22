@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>今日の祈り</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans JP', sans-serif; background: #e0e5ec; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem; }
+        .phone-frame { width: 375px; height: 812px; border: 14px solid #1a1a1a; border-radius: 40px; background: #f5f7fa; box-shadow: 0 19px 38px rgba(0,0,0,0.30), 0 15px 12px rgba(0,0,0,0.22); overflow: hidden; display: flex; flex-direction: column; position: relative; }
+        .phone-content { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; }
+        .screen { flex-grow: 1; }
+        .hidden { display: none; }
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .requests-content { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out, margin-top 0.5s ease-in-out; margin-top: 0; }
+        .expanded .requests-content { max-height: 500px; margin-top: 1rem; }
+
+        .list-item-content { transition: transform 0.3s ease-out; position: relative; z-index: 10; background-color: white; }
+        .list-item-content.swiped { transform: translateX(-96px); }
+    </style>
+</head>
+<body>
+
+    <div class="phone-frame">
+        <div id="main-app" class="h-full flex flex-col">
+             <header class="bg-white/80 backdrop-blur-sm shadow-md sticky top-0 z-20 flex-shrink-0">
+                <div class="relative flex justify-center items-center p-4 h-16">
+                    <div class="absolute left-4">
+                        <button id="menu-button" class="p-2 rounded-full hover:bg-gray-200 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                        </button>
+                    </div>
+                    <h1 id="header-title" class="text-xl font-bold text-gray-900 cursor-pointer">Today's Prayer</h1>
+                </div>
+            </header>
+            
+            <div class="phone-content">
+                <main id="home-screen" class="screen p-4">
+                     <div class="fade-in bg-white rounded-2xl shadow-lg p-6 text-center">
+                        <p id="current-date" class="text-sm text-gray-500 mb-4"></p>
+                        <h2 class="text-2xl font-bold text-gray-900 mb-4">今日の祈り</h2>
+                        <hr class="border-gray-300 my-4">
+                        <div id="prayer-list-container" class="space-y-3 text-left"></div>
+                    </div>
+                </main>
+                <div id="list-screen" class="screen hidden p-4 flex flex-col">
+                    <div class="mb-4">
+                        <input type="search" id="search-input" placeholder="名前か祈祷課題で検索..." class="w-full p-3 border rounded-lg">
+                    </div>
+                    <div id="all-people-list" class="flex-grow space-y-4 overflow-y-auto mb-4"></div>
+                    <form id="add-form" class="flex-shrink-0 mt-auto bg-white p-4 rounded-2xl shadow-lg">
+                        <h2 class="text-lg font-bold text-gray-800 mb-2">祈る相手を追加する</h2>
+                        <div class="flex gap-2">
+                            <input type="text" id="new-name-input" placeholder="名前を入力" class="flex-grow p-3 border rounded-lg" required>
+                            <button type="submit" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg">追加</button>
+                        </div>
+                    </form>
+                </div>
+                <div id="settings-screen" class="screen hidden p-4">
+                    <div class="space-y-6">
+                        <div class="bg-white p-6 rounded-2xl shadow-lg">
+                            <label for="start-date-input" class="block text-lg font-bold text-gray-800 mb-2">開始日の設定</label>
+                            <input type="date" id="start-date-input" class="w-full p-3 border rounded-lg">
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-lg">
+                            <label for="cycle-period-input" class="block text-lg font-bold text-gray-800 mb-2">周期の設定（日数）</label>
+                            <input type="number" id="cycle-period-input" min="1" class="w-full p-3 border rounded-lg">
+                        </div>
+                        <button id="save-settings-button" class="w-full bg-blue-500 text-white font-bold py-4 rounded-lg">設定を保存</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="menu-drawer" class="absolute inset-0 z-30 transform -translate-x-full transition-transform duration-300">
+                <div id="menu-overlay" class="absolute inset-0 bg-black/50"></div>
+                <div class="relative w-64 h-full bg-white shadow-xl p-4">
+                    <h2 class="text-xl font-bold mb-6">メニュー</h2>
+                    <ul class="space-y-2">
+                        <li><a href="#" data-screen="home-screen" class="menu-item block p-3 hover:bg-gray-100 rounded">戻る</a></li>
+                        <li><a href="#" data-screen="list-screen" class="menu-item block p-3 hover:bg-gray-100 rounded">祈りのリスト一覧</a></li>
+                        <li><a href="#" data-screen="settings-screen" class="menu-item block p-3 hover:bg-gray-100 rounded">設定</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div id="person-modal" class="absolute inset-0 bg-black/60 z-40 items-center justify-center p-4 hidden">
+                <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+                    <h3 id="person-modal-name" class="text-2xl font-bold mb-4 text-center"></h3>
+                    <textarea id="person-modal-requests" class="w-full h-40 p-3 border rounded-lg mb-4" placeholder="祈祷課題..."></textarea>
+                    <div class="flex gap-2">
+                        <button id="person-modal-close" class="w-full py-3 bg-gray-200 rounded-lg">閉じる</button>
+                        <button id="person-modal-save" class="w-full py-3 bg-blue-500 text-white rounded-lg">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let prayerDays = [];
+            let settings = { startDate: new Date().toISOString().split('T')[0], cyclePeriod: 14 };
+            let swipedItem = null;
+
+            const DATA_STORAGE_KEY = 'prayerApp_data_v5';
+
+            function loadData() {
+                const savedData = localStorage.getItem(DATA_STORAGE_KEY);
+                if (savedData) {
+                    const data = JSON.parse(savedData);
+                    prayerDays = data.prayerDays || [];
+                    settings = data.settings || settings;
+                }
+                while (prayerDays.length < settings.cyclePeriod) prayerDays.push([]);
+                prayerDays.length = settings.cyclePeriod;
+            }
+
+            function saveData() {
+                localStorage.setItem(DATA_STORAGE_KEY, JSON.stringify({ prayerDays, settings }));
+            }
+
+            const screens = document.querySelectorAll('.screen');
+            const headerTitle = document.getElementById('header-title');
+            const dateElement = document.getElementById('current-date');
+            const prayerListContainer = document.getElementById('prayer-list-container');
+            const allPeopleList = document.getElementById('all-people-list');
+            const addForm = document.getElementById('add-form');
+            const nameInput = document.getElementById('new-name-input');
+            const searchInput = document.getElementById('search-input');
+            const startDateInput = document.getElementById('start-date-input');
+            const cyclePeriodInput = document.getElementById('cycle-period-input');
+            const saveSettingsButton = document.getElementById('save-settings-button');
+            const menuButton = document.getElementById('menu-button');
+            const menuDrawer = document.getElementById('menu-drawer');
+            const menuOverlay = document.getElementById('menu-overlay');
+            const menuItems = document.querySelectorAll('.menu-item');
+            const personModal = document.getElementById('person-modal');
+            const personModalName = document.getElementById('person-modal-name');
+            const personModalRequests = document.getElementById('person-modal-requests');
+            const personModalSave = document.getElementById('person-modal-save');
+            const personModalClose = document.getElementById('person-modal-close');
+
+            function showScreen(screenId) {
+                screens.forEach(s => s.classList.add('hidden'));
+                const targetScreen = document.getElementById(screenId);
+                if (targetScreen) targetScreen.classList.remove('hidden');
+                const screenTitles = {'home-screen': "Today's Prayer", 'list-screen': '祈りのリスト一覧', 'settings-screen': '設定'};
+                headerTitle.textContent = screenTitles[screenId] || "Today's Prayer";
+                toggleMenu(true);
+            }
+
+            function toggleMenu(forceClose = false) {
+                menuDrawer.classList.toggle('-translate-x-full', forceClose);
+            }
+            
+            function renderHomeScreen() {
+                const today = new Date();
+                const startDate = new Date(settings.startDate);
+                const todayUTC = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+                const startUTC = Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+                const dayDifference = Math.floor((todayUTC - startUTC) / (1000 * 60 * 60 * 24));
+                
+                const options = { month: 'long', day: 'numeric', weekday: 'long' };
+                dateElement.textContent = today.toLocaleDateString('ja-JP-u-ca-japanese', options);
+
+                prayerListContainer.innerHTML = '';
+                const totalPeople = prayerDays.flat().length;
+                if (totalPeople === 0) {
+                    prayerListContainer.innerHTML = '<p class="text-center text-gray-500">リスト一覧から祈る人を追加してください</p>';
+                    return;
+                }
+                if (dayDifference < 0) {
+                    prayerListContainer.innerHTML = `<p class="text-center text-gray-500">開始まであと ${-dayDifference} 日です</p>`;
+                    return;
+                }
+                
+                const todaysIndex = dayDifference % settings.cyclePeriod;
+                const peopleForToday = prayerDays[todaysIndex] || [];
+
+                if (peopleForToday.length > 0) {
+                    peopleForToday.forEach(person => {
+                        const container = document.createElement('div');
+                        container.className = 'bg-blue-50 p-4 rounded-lg shadow-sm cursor-pointer hover:bg-blue-100 transition';
+                        container.innerHTML = `<div class="flex justify-between items-center"><span class="text-lg font-medium text-blue-800">${person.name}</span><svg class="w-5 h-5 text-blue-500 transition-transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg></div><div class="requests-content"><hr class="my-2 border-blue-200"><p class="text-left text-gray-700 whitespace-pre-wrap">${person.requests || '祈祷課題はまだ登録されていません。'}</p></div>`;
+                        container.addEventListener('click', (e) => {
+                            e.currentTarget.classList.toggle('expanded');
+                            e.currentTarget.querySelector('svg').classList.toggle('rotate-180');
+                        });
+                        prayerListContainer.appendChild(container);
+                    });
+                } else {
+                    prayerListContainer.innerHTML = '<p class="text-center text-gray-500">今日の対象者はいません</p>';
+                }
+            }
+
+            function renderAllPeopleList() {
+                allPeopleList.innerHTML = '';
+                swipedItem = null;
+                const searchTerm = searchInput.value.trim().toLowerCase();
+
+                if (searchTerm) {
+                    const allPeople = prayerDays.flat();
+                    const filteredPeople = allPeople.filter(person => 
+                        person.name.toLowerCase().includes(searchTerm) || 
+                        (person.requests && person.requests.toLowerCase().includes(searchTerm))
+                    );
+
+                    if (filteredPeople.length > 0) {
+                         filteredPeople.forEach(person => {
+                            // Find which day this person belongs to for deletion
+                            const dayIndex = prayerDays.findIndex(day => day.some(p => p.id === person.id));
+                            createPersonListItem(person, dayIndex);
+                        });
+                    } else {
+                        allPeopleList.innerHTML = '<p class="text-center text-gray-500">検索結果が見つかりません。</p>';
+                    }
+                } else {
+                    prayerDays.forEach((peopleOnDay, dayIndex) => {
+                        const dayContainer = document.createElement('div');
+                        dayContainer.innerHTML = `<h3 class="text-md font-bold text-gray-600 mb-2 p-1 bg-gray-200 rounded">${dayIndex + 1}日目</h3>`;
+                        const listForDay = document.createElement('div');
+                        listForDay.className = 'space-y-2';
+
+                        if (peopleOnDay.length > 0) {
+                            peopleOnDay.forEach(person => {
+                                createPersonListItem(person, dayIndex, listForDay);
+                            });
+                        }
+                        dayContainer.appendChild(listForDay);
+                        allPeopleList.appendChild(dayContainer);
+                    });
+                }
+            }
+
+            function createPersonListItem(person, dayIndex, container = allPeopleList) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'relative rounded-lg shadow-sm overflow-hidden';
+                
+                const actionBg = document.createElement('div');
+                actionBg.className = 'absolute inset-y-0 right-0 w-24 bg-red-500 flex items-center justify-center';
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'text-white font-bold';
+                deleteButton.textContent = '削除';
+                deleteButton.onclick = () => deletePerson(person.id, dayIndex);
+                actionBg.appendChild(deleteButton);
+                
+                const content = document.createElement('div');
+                content.className = 'list-item-content w-full p-4 bg-white cursor-pointer';
+                content.innerHTML = `<div class="flex items-center"><span class="text-lg">${person.name}</span></div>`;
+
+                wrapper.appendChild(actionBg);
+                wrapper.appendChild(content);
+                container.appendChild(wrapper);
+                handleSwipe(content, person.id);
+            }
+            
+            function renderSettingsScreen() {
+                startDateInput.value = settings.startDate;
+                cyclePeriodInput.value = settings.cyclePeriod;
+            }
+
+            function openPersonModal(personId) {
+                if (isSwiping) return;
+                const person = prayerDays.flat().find(p => p.id === personId);
+                if (!person) return;
+
+                personModal.style.display = 'flex';
+                personModalName.textContent = person.name;
+                personModalRequests.value = person.requests || '';
+                
+                personModalSave.onclick = () => {
+                    person.requests = personModalRequests.value.trim();
+                    saveData();
+                    closePersonModal();
+                };
+            }
+            function closePersonModal() { personModal.style.display = 'none'; }
+            
+            function addPerson(name) {
+                let minLength = Infinity;
+                let targetDayIndex = 0;
+                
+                for (let i = 0; i < prayerDays.length; i++) {
+                    if (prayerDays[i].length < minLength) {
+                        minLength = prayerDays[i].length;
+                        targetDayIndex = i;
+                    }
+                }
+                prayerDays[targetDayIndex].push({ id: Date.now(), name: name, requests: '' });
+                saveData();
+            }
+            
+            function deletePerson(personId, dayIndex) {
+                 if (confirm(`リストから削除しますか？`)) {
+                    prayerDays[dayIndex] = prayerDays[dayIndex].filter(p => p.id !== personId);
+                    saveData();
+                    renderAllPeopleList();
+                    renderHomeScreen();
+                }
+            }
+
+            let isSwiping = false;
+            function handleSwipe(element, personId) {
+                let startX = 0, diff = 0;
+                element.addEventListener('touchstart', (e) => {
+                    if (swipedItem && swipedItem !== element) swipedItem.classList.remove('swiped');
+                    startX = e.touches[0].clientX;
+                    isSwiping = false;
+                    element.style.transition = 'none';
+                }, { passive: true });
+                element.addEventListener('touchmove', (e) => {
+                    diff = e.touches[0].clientX - startX;
+                    if (Math.abs(diff) > 10) isSwiping = true;
+                    if (diff < 0 && diff > -120) element.style.transform = `translateX(${diff}px)`;
+                }, { passive: true });
+                element.addEventListener('touchend', () => {
+                    element.style.transition = 'transform 0.3s ease-out';
+                    if (diff < -50) {
+                        element.classList.add('swiped');
+                        swipedItem = element;
+                    } else {
+                        element.classList.remove('swiped');
+                        swipedItem = null;
+                    }
+                    element.style.transform = '';
+                    setTimeout(() => { isSwiping = false; }, 100);
+                });
+                element.addEventListener('click', () => { if (!isSwiping && !element.classList.contains('swiped')) openPersonModal(personId); });
+            }
+
+            headerTitle.addEventListener('click', () => showScreen('home-screen'));
+            menuButton.addEventListener('click', () => toggleMenu());
+            menuOverlay.addEventListener('click', () => toggleMenu());
+            menuItems.forEach(item => {
+                item.addEventListener('click', (e) => { e.preventDefault(); showScreen(e.currentTarget.dataset.screen); });
+            });
+            
+            addForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = nameInput.value.trim();
+                if (name) {
+                    addPerson(name);
+                    renderAllPeopleList();
+                    nameInput.value = '';
+                }
+            });
+            
+            searchInput.addEventListener('input', renderAllPeopleList);
+
+            saveSettingsButton.addEventListener('click', () => {
+                const oldPeriod = settings.cyclePeriod;
+                const newPeriod = parseInt(cyclePeriodInput.value) || 14;
+
+                settings.startDate = startDateInput.value;
+                settings.cyclePeriod = newPeriod;
+
+                if (oldPeriod !== newPeriod) {
+                    const allPeople = prayerDays.flat();
+                    prayerDays = Array.from({ length: newPeriod }, () => []);
+                    
+                    allPeople.forEach(person => {
+                       let minLength = Infinity;
+                       let targetDayIndex = 0;
+                       for (let i = 0; i < prayerDays.length; i++) {
+                           if (prayerDays[i].length < minLength) {
+                               minLength = prayerDays[i].length;
+                               targetDayIndex = i;
+                           }
+                       }
+                       prayerDays[targetDayIndex].push(person);
+                    });
+                }
+                
+                saveData();
+                alert('設定を保存しました。');
+                renderAllPeopleList();
+                renderHomeScreen();
+                showScreen('home-screen');
+            });
+
+            personModalClose.addEventListener('click', closePersonModal);
+            
+            loadData();
+            renderHomeScreen();
+            renderAllPeopleList();
+            renderSettingsScreen();
+        });
+    </script>
+</body>
+</html>
+
